@@ -1,0 +1,791 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>JARVIS AI 3.5</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Noto+Sans+Tamil:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #030303;
+    --surface: #0a0806;
+    --surface-2: #14100b;
+    --line: rgba(255, 176, 70, 0.16);
+    --text: #fff1dc;
+    --muted: #b8967a;
+    --accent: #ffb347;
+    --accent-hot: #ff7a1a;
+    --accent-bright: #ffe2a0;
+    --danger: #ff6b5a;
+    --glow: rgba(255, 170, 60, 0.45);
+    --radius: 6px;
+    color-scheme: dark;
+  }
+  [data-theme="light"] {
+    --bg: #f7f1e8;
+    --surface: #ffffff;
+    --surface-2: #f1e6d6;
+    --line: rgba(160, 95, 20, 0.22);
+    --text: #2a1a08;
+    --muted: #7a5a3a;
+    --accent: #c9781a;
+    --accent-hot: #e0560a;
+    --accent-bright: #ffb347;
+    --danger: #c42d3f;
+    --glow: rgba(201, 120, 26, 0.3);
+    color-scheme: light;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    font-family: "Manrope", system-ui, -apple-system, "Segoe UI", sans-serif;
+    background:
+      radial-gradient(900px 600px at 50% 30%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 70%),
+      var(--bg);
+    color: var(--text);
+    font-size: 15px;
+    line-height: 1.5;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    overflow-x: hidden;
+  }
+  body:lang(ta), .ta { font-family: "Noto Sans Tamil", "Manrope", sans-serif; }
+  button, input { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* Decorative HUD frame lines, drawn like the reference artwork */
+  .hud-top, .hud-bottom {
+    position: fixed; left: 6%; right: 6%; height: 10px; pointer-events: none; z-index: 0;
+    border-top: 1px solid var(--line);
+    background: linear-gradient(90deg, transparent, var(--accent) 40%, transparent 80%);
+    background-size: 200% 100%; opacity: 0.35;
+    animation: shimmer 6s linear infinite;
+  }
+  .hud-top { top: 58px; }
+  .hud-bottom { bottom: 14px; }
+  .hud-side {
+    position: fixed; top: 20%; bottom: 20%; width: 2px; pointer-events: none; z-index: 0;
+    background: linear-gradient(180deg, transparent, var(--accent), transparent);
+    opacity: 0.35; animation: pulseLine 4s ease-in-out infinite;
+  }
+  .hud-side.left { left: 14px; }
+  .hud-side.right { right: 14px; animation-delay: 2s; }
+
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 12px; padding: 16px clamp(20px, 3vw, 48px); border-bottom: 1px solid var(--line);
+    position: sticky; top: env(safe-area-inset-top, 0px);
+    background: color-mix(in srgb, var(--bg) 82%, transparent);
+    backdrop-filter: blur(10px); z-index: 5;
+  }
+  .brand { display: flex; align-items: baseline; gap: 10px; }
+  .brand h1 {
+    font-size: 17px; margin: 0; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase;
+    background: linear-gradient(90deg, var(--accent-bright), var(--accent), var(--accent-hot));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .brand span { color: var(--accent); font-family: "JetBrains Mono", monospace; font-size: 12px; }
+  .controls { display: flex; gap: 8px; align-items: center; }
+
+  .pill {
+    background: transparent; border: 1px solid var(--line); border-radius: 999px;
+    padding: 6px 14px; cursor: pointer; font-size: 13px; color: var(--muted);
+    min-height: 36px; transition: color 0.2s, border-color 0.2s, box-shadow 0.2s;
+  }
+  .pill:hover { color: var(--accent-bright); border-color: var(--accent); box-shadow: 0 0 14px var(--glow); }
+  .pill[aria-pressed="true"] { color: var(--accent); border-color: var(--accent); }
+
+  main {
+    position: relative; z-index: 1;
+    display: grid; grid-template-columns: 1fr;
+    gap: 24px; padding: 28px clamp(20px, 3vw, 48px); max-width: 1440px; margin: 0 auto;
+    min-height: calc(100vh - 66px);
+  }
+  @media (min-width: 1100px) {
+    main { grid-template-columns: minmax(340px, 440px) 1fr; }
+  }
+
+  /* Left column: sphere and controls */
+  .core {
+    position: relative; align-self: start;
+    display: flex; flex-direction: column; align-items: center; gap: 18px;
+    background: linear-gradient(180deg, color-mix(in srgb, var(--surface) 92%, transparent), var(--bg));
+    border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 28px 18px 22px;
+  }
+  /* Corner brackets, like the reference frame */
+  .core::before, .core::after, .chat::before, .chat::after {
+    content: ""; position: absolute; width: 22px; height: 22px; pointer-events: none;
+    border: 2px solid var(--accent); opacity: 0.8;
+  }
+  .core::before, .chat::before { top: -1px; left: -1px; border-right: 0; border-bottom: 0; }
+  .core::after, .chat::after { bottom: -1px; right: -1px; border-left: 0; border-top: 0; }
+
+  .sphere-wrap { position: relative; width: 360px; max-width: 100%; aspect-ratio: 1; }
+  canvas#viz { width: 100%; height: 100%; display: block; }
+  .sweep {
+    position: absolute; left: 0; right: 0; height: 2px; top: 0; pointer-events: none;
+    background: linear-gradient(90deg, transparent, var(--accent-bright), transparent);
+    box-shadow: 0 0 12px var(--glow); opacity: 0.6;
+    animation: sweep 4.5s linear infinite;
+  }
+  .gear {
+    position: absolute; right: 2px; bottom: 2px; width: 46px; height: 46px; opacity: 0.7;
+    animation: spin 18s linear infinite;
+  }
+  .gear circle, .gear path { fill: none; stroke: var(--accent); stroke-width: 1.2; }
+
+  #state {
+    font-family: "JetBrains Mono", monospace; font-size: 12px; color: var(--muted);
+    min-height: 20px; text-align: center; letter-spacing: 0.04em;
+  }
+  #state strong { color: var(--accent-bright); font-weight: 500; text-transform: uppercase; }
+
+  .mic {
+    width: 72px; height: 72px; border-radius: 50%; border: 1px solid var(--accent);
+    background: radial-gradient(circle at 35% 30%, var(--surface-2), var(--surface));
+    color: var(--accent); cursor: pointer; display: grid; place-items: center;
+    box-shadow: 0 0 22px var(--glow), inset 0 0 14px rgba(255, 170, 60, 0.12);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    animation: breathe 3.2s ease-in-out infinite;
+  }
+  .mic:hover { transform: scale(1.05); }
+  .mic[aria-pressed="true"] {
+    background: var(--accent); color: var(--bg); animation: none;
+    box-shadow: 0 0 44px var(--glow);
+  }
+  .mic:disabled { opacity: 0.35; cursor: not-allowed; animation: none; box-shadow: none; }
+  .mic svg { width: 26px; height: 26px; }
+
+  .toggles { display: flex; flex-direction: column; gap: 10px; width: 100%; font-size: 13px; color: var(--muted); }
+  .toggles label { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+  .toggles input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--accent); }
+
+  /* Right column: chat */
+  .chat {
+    position: relative;
+    display: flex; flex-direction: column; min-height: 640px;
+    background: linear-gradient(180deg, color-mix(in srgb, var(--surface) 92%, transparent), var(--bg));
+    border: 1px solid var(--line); border-radius: var(--radius);
+    overflow: hidden;
+  }
+  #log {
+    flex: 1; overflow-y: auto; padding: 22px; display: flex; flex-direction: column; gap: 14px;
+    max-height: 62vh; min-height: 300px;
+  }
+  .msg { max-width: 82%; padding: 10px 14px; border-radius: 4px; white-space: pre-wrap; word-wrap: break-word; animation: fadeUp 0.4s ease both; }
+  .msg.user { align-self: flex-end; background: var(--surface-2); border: 1px solid var(--line); }
+  .msg.ai { align-self: flex-start; border-left: 2px solid var(--accent); padding-left: 14px; box-shadow: -6px 0 18px -10px var(--glow); }
+  .msg.system { align-self: center; color: var(--muted); font-size: 12px; font-family: "JetBrains Mono", monospace; letter-spacing: 0.04em; }
+  .msg.warn { color: var(--danger); }
+
+  .quick {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 8px; padding: 0 22px 16px;
+  }
+  .quick button {
+    text-align: left; background: transparent; border: 1px solid var(--line);
+    border-radius: 4px; padding: 10px 12px; cursor: pointer; color: var(--text); min-height: 44px;
+    position: relative; overflow: hidden; transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .quick button::after {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background: linear-gradient(100deg, transparent 30%, color-mix(in srgb, var(--accent) 22%, transparent) 50%, transparent 70%);
+    transform: translateX(-100%);
+  }
+  .quick button:hover { border-color: var(--accent); box-shadow: 0 0 16px var(--glow); }
+  .quick button:hover::after { animation: wipe 0.9s ease; }
+  .quick small { display: block; color: var(--muted); font-size: 12px; }
+
+  .notice {
+    margin: 0 22px 16px; padding: 10px 14px; border-radius: 4px; font-size: 13px;
+    background: transparent; color: var(--muted); border: 1px dashed var(--line);
+  }
+  form.input {
+    display: flex; gap: 8px; padding: 14px 22px 18px; border-top: 1px solid var(--line);
+  }
+  form.input input {
+    flex: 1; min-width: 0; background: var(--bg); border: 1px solid var(--line);
+    border-radius: 4px; padding: 12px 14px; min-height: 44px;
+  }
+  form.input input:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 14px var(--glow); }
+  form.input button {
+    background: var(--accent); color: var(--bg); border: 0; border-radius: 4px;
+    padding: 0 20px; cursor: pointer; font-weight: 700; letter-spacing: 0.06em; min-height: 44px;
+    text-transform: uppercase; font-size: 13px;
+  }
+  form.input button:hover { box-shadow: 0 0 18px var(--glow); }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+  .sphere-wrap {
+    touch-action: none; transform-origin: center; transition: transform 0.15s ease-out; cursor: zoom-in;
+  }
+  .apps { padding: 0 22px 14px; }
+  .apps-head {
+    display: flex; justify-content: space-between; align-items: center; gap: 10px;
+    margin-bottom: 10px; font-family: "JetBrains Mono", monospace; font-size: 12px;
+    color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase;
+  }
+  .app-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; }
+  .app-tile {
+    opacity: 0; transform: translateY(8px) scale(0.96);
+    transition: opacity 0.35s ease, transform 0.35s ease, border-color 0.2s, box-shadow 0.2s;
+    background: transparent; border: 1px solid var(--line); border-radius: 6px;
+    padding: 10px 6px; cursor: pointer; color: var(--text); font-size: 12px;
+    display: flex; flex-direction: column; align-items: center; gap: 6px; min-height: 80px;
+  }
+  .app-tile.show { opacity: 1; transform: none; }
+  .app-tile:hover { border-color: var(--accent); box-shadow: 0 0 14px var(--glow); }
+  .app-icon {
+    width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center;
+    font-weight: 700; font-size: 15px; color: #0a0806;
+  }
+
+  /* Animations */
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes sweep { from { top: 0; } to { top: 100%; } }
+  @keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+  @keyframes pulseLine { 0%, 100% { opacity: 0.15; } 50% { opacity: 0.5; } }
+  @keyframes breathe {
+    0%, 100% { box-shadow: 0 0 18px var(--glow), inset 0 0 14px rgba(255,170,60,0.12); }
+    50% { box-shadow: 0 0 34px var(--glow), inset 0 0 18px rgba(255,170,60,0.2); }
+  }
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  @keyframes wipe { to { transform: translateX(100%); } }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<div class="hud-top" aria-hidden="true"></div>
+<div class="hud-bottom" aria-hidden="true"></div>
+<div class="hud-side left" aria-hidden="true"></div>
+<div class="hud-side right" aria-hidden="true"></div>
+
+<header>
+  <div class="brand">
+    <h1>JARVIS</h1>
+    <span>AI 3.5</span>
+  </div>
+  <div class="controls">
+    <button class="pill" id="langBtn" aria-pressed="false" title="Switch language">தமிழ்</button>
+    <button class="pill" id="themeBtn" aria-pressed="false" title="Toggle theme">Light</button>
+    <button class="pill" id="clearBtn" title="Clear conversation">New chat</button>
+  </div>
+</header>
+
+<main>
+  <section class="core" aria-label="Assistant status">
+    <div class="sphere-wrap">
+      <canvas id="viz" aria-hidden="true"></canvas>
+      <div class="sweep" aria-hidden="true"></div>
+      <svg class="gear" viewBox="0 0 48 48" aria-hidden="true">
+        <circle cx="24" cy="24" r="8"/>
+        <circle cx="24" cy="24" r="16" stroke-dasharray="3 4"/>
+        <path d="M24 2v6M24 40v6M2 24h6M40 24h6M9 9l4 4M35 35l4 4M9 39l4-4M35 13l4-4"/>
+      </svg>
+    </div>
+
+    <div id="state" role="status" aria-live="polite"><strong>Idle</strong> · say something or type below</div>
+
+    <button class="mic" id="micBtn" aria-pressed="false" aria-label="Start voice input">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+        <rect x="9" y="3" width="6" height="11" rx="3"/>
+        <path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>
+      </svg>
+    </button>
+
+    <div class="toggles">
+      <label>
+        <span>Voice replies</span>
+        <input type="checkbox" id="speakToggle" checked>
+      </label>
+      <label>
+        <span>Voice activation enabled</span>
+        <input type="checkbox" id="voiceEnabled" checked>
+      </label>
+    </div>
+  </section>
+
+  <section class="chat" aria-label="Conversation">
+    <div id="log" aria-live="polite"></div>
+
+    <div class="apps">
+      <div class="apps-head">
+        <span>Apps</span>
+        <button class="pill" id="revealBtn">Reveal one by one</button>
+      </div>
+      <div class="app-grid" id="appGrid" aria-live="polite"></div>
+    </div>
+
+    <div class="quick" id="quick">
+      <button data-cmd="What time is it?"><span>Time</span><small>Current time and date</small></button>
+      <button data-cmd="Check my battery"><span>Battery</span><small>Level and charging state</small></button>
+      <button data-cmd="Open WhatsApp"><span>Open WhatsApp</span><small>Launch an installed app</small></button>
+      <button data-cmd="Turn on Bluetooth"><span>Bluetooth</span><small>Open settings to enable</small></button>
+      <button data-cmd="Increase brightness"><span>Brightness</span><small>Adjust or open display settings</small></button>
+      <button data-cmd="Explain artificial intelligence"><span>Explain</span><small>Short, clear answers</small></button>
+    </div>
+
+    <div class="notice" id="notice">
+      Preview mode: replies come from built-in demo logic. Phone actions only work in the Android app.
+    </div>
+
+    <form class="input" id="form" autocomplete="off">
+      <label class="sr" for="text">Message JARVIS</label>
+      <input id="text" type="text" placeholder="Ask JARVIS anything…" maxlength="500">
+      <button type="submit">Send</button>
+    </form>
+  </section>
+</main>
+
+<script>
+(() => {
+  const state = { lang: "en", listening: false, thinking: false, speaking: false, history: [] };
+  const $ = (id) => document.getElementById(id);
+  const log = $("log"), stateEl = $("state"), micBtn = $("micBtn"), form = $("form"), input = $("text");
+  const speakToggle = $("speakToggle"), voiceEnabled = $("voiceEnabled");
+
+  const STRINGS = {
+    en: {
+      idle: "say something or type below",
+      listening: "Listening…",
+      thinking: "Processing…",
+      speaking: "Speaking…",
+      greet: "Systems online. How can I help?",
+      placeholder: "Ask JARVIS anything…",
+      cleared: "New conversation started.",
+      voiceOff: "Voice activation is turned off in settings.",
+      noSpeech: "Speech recognition is not supported in this browser.",
+      notice: "Preview mode: replies come from built-in demo logic. Phone actions only work in the Android app.",
+      fallback: "I can help with questions, calculations, code, and quick device info here. Connect an AI provider in the Android app for full answers.",
+      appNote: (app) => `On Android, JARVIS would launch ${app} if it is installed. This web preview cannot open apps.`,
+      settingsNote: (what) => `On Android I would open ${what} so you can make the change yourself. Android does not let apps flip this switch silently.`,
+      confirm: "Sending messages and placing calls need your confirmation first. Tell me who to message and what to say, and I will ask before sending.",
+      timeNow: (d) => `It is ${d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} on ${d.toLocaleDateString([], { weekday: "long", day: "numeric", month: "long" })}.`,
+      battery: (p, c) => `Battery is at ${p}%${c ? ", charging" : ", not charging"}.`,
+      batteryNA: "Battery status is not available in this browser. The Android app reads it directly.",
+      calc: (expr, res) => `${expr} = ${res}`,
+      calcErr: "I could not evaluate that expression.",
+      ai: "Artificial intelligence is software that learns patterns from data to perform tasks that normally need human judgment, such as understanding language, recognising images, or making predictions. Modern assistants are built on large language models trained on huge amounts of text.",
+    },
+    ta: {
+      idle: "கீழே பேசவும் அல்லது தட்டச்சு செய்யவும்",
+      listening: "கேட்டுக்கொண்டிருக்கிறேன்…",
+      thinking: "செயலாக்குகிறேன்…",
+      speaking: "பேசுகிறேன்…",
+      greet: "அமைப்பு தயாராக உள்ளது. நான் எப்படி உதவ முடியும்?",
+      placeholder: "எதையும் கேளுங்கள்…",
+      cleared: "புதிய உரையாடல் தொடங்கப்பட்டது.",
+      voiceOff: "அமைப்புகளில் குரல் செயல்படுத்தல் நிறுத்தப்பட்டுள்ளது.",
+      noSpeech: "இந்த உலாவியில் பேச்சு அறிதல் ஆதரிக்கப்படவில்லை.",
+      notice: "முன்னோட்ட முறை: பதில்கள் உள்ளமைந்த டெமோ தர்க்கத்திலிருந்து வருகின்றன. தொலைபேசி செயல்கள் Android செயலியில் மட்டுமே வேலை செய்யும்.",
+      fallback: "கேள்விகள், கணக்கீடுகள், குறியீடு மற்றும் சாதனத் தகவல்களில் உதவ முடியும். முழு பதில்களுக்கு Android செயலியில் AI வழங்குநரை இணைக்கவும்.",
+      appNote: (app) => `Android இல் ${app} நிறுவப்பட்டிருந்தால் JARVIS அதைத் திறக்கும். இந்த இணைய முன்னோட்டத்தால் செயலிகளைத் திறக்க முடியாது.`,
+      settingsNote: (what) => `Android இல் ${what} திறக்கப்படும், நீங்களே மாற்றம் செய்யலாம். இதை செயலிகள் அமைதியாக மாற்ற முடியாது.`,
+      confirm: "செய்திகள் அனுப்பவும் அழைப்புகள் செய்யவும் முதலில் உங்கள் உறுதிப்படுத்தல் தேவை.",
+      timeNow: (d) => `இப்போது ${d.toLocaleTimeString("ta-IN", { hour: "2-digit", minute: "2-digit" })}, ${d.toLocaleDateString("ta-IN", { weekday: "long", day: "numeric", month: "long" })}.`,
+      battery: (p, c) => `பேட்டரி ${p}% உள்ளது${c ? ", சார்ஜ் ஆகிறது" : ", சார்ஜ் ஆகவில்லை"}.`,
+      batteryNA: "இந்த உலாவியில் பேட்டரி நிலை கிடைக்கவில்லை. Android செயலி அதை நேரடியாகப் படிக்கும்.",
+      calc: (expr, res) => `${expr} = ${res}`,
+      calcErr: "அந்த வெளிப்பாட்டைக் கணக்கிட முடியவில்லை.",
+      ai: "செயற்கை நுண்ணறிவு என்பது தரவிலிருந்து வடிவங்களைக் கற்று மொழி புரிதல், படம் அடையாளம் காணுதல் அல்லது முன்கணிப்பு போன்ற பணிகளைச் செய்யும் மென்பொருள் ஆகும்.",
+    },
+  };
+  const t = () => STRINGS[state.lang];
+
+  /* ---------- Particle sphere visualizer ---------- */
+  const canvas = $("viz");
+  const ctx = canvas.getContext("2d");
+  const DPR = Math.min(window.devicePixelRatio || 1, 2);
+  let size = 360;
+  function sizeCanvas() {
+    size = canvas.clientWidth || 360;
+    canvas.width = size * DPR;
+    canvas.height = size * DPR;
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  }
+  sizeCanvas();
+  window.addEventListener("resize", sizeCanvas);
+
+  // Fibonacci sphere points, each with a random phase and spark timer
+  const N = 520;
+  const pts = [];
+  const golden = Math.PI * (3 - Math.sqrt(5));
+  for (let i = 0; i < N; i++) {
+    const y = 1 - (i / (N - 1)) * 2;
+    const r = Math.sqrt(1 - y * y);
+    const th = golden * i;
+    pts.push({
+      x: Math.cos(th) * r, y, z: Math.sin(th) * r,
+      phase: Math.random() * Math.PI * 2,
+      spark: 0,
+      sparkRate: Math.random(),
+    });
+  }
+
+  let level = 0;
+  let rot = 0;
+  let last = performance.now();
+  const palette = { hot: [255, 122, 26], amber: [255, 179, 71], bright: [255, 226, 160] };
+
+  function rgba(c, a) { return `rgba(${c[0]},${c[1]},${c[2]},${a})`; }
+
+  function frame(now) {
+    const dt = Math.min(64, now - last) / 16.67;
+    last = now;
+
+    const target = state.listening ? 0.75 : state.speaking ? 0.9 : state.thinking ? 0.5 : 0.18;
+    level += (target - level) * 0.08;
+    const spin = (state.thinking ? 0.02 : 0.006) * dt;
+    rot += spin;
+
+    ctx.clearRect(0, 0, size, size);
+    const c = size / 2;
+    const R = size * 0.34 * (1 + level * 0.06 + Math.sin(now * 0.002) * 0.015);
+    const tilt = 0.35 + Math.sin(now * 0.0005) * 0.08;
+    const cosY = Math.cos(rot), sinY = Math.sin(rot);
+    const cosX = Math.cos(tilt), sinX = Math.sin(tilt);
+
+    // Outer halo
+    const halo = ctx.createRadialGradient(c, c, R * 0.2, c, c, R * 1.5);
+    halo.addColorStop(0, rgba(palette.amber, 0.25 + level * 0.15));
+    halo.addColorStop(0.6, rgba(palette.hot, 0.06));
+    halo.addColorStop(1, rgba(palette.hot, 0));
+    ctx.fillStyle = halo;
+    ctx.beginPath(); ctx.arc(c, c, R * 1.5, 0, Math.PI * 2); ctx.fill();
+
+    // Orbit rings (dashed, counter-rotating)
+    ctx.lineWidth = 1;
+    for (let i = 0; i < 3; i++) {
+      const rr = R * (1.22 + i * 0.16);
+      ctx.save();
+      ctx.translate(c, c);
+      ctx.rotate(tilt * (i % 2 ? -1 : 1) + rot * (i % 2 ? -0.6 : 0.4) * (i + 1) * 0.5);
+      ctx.scale(1, 0.28 + i * 0.12);
+      ctx.setLineDash([3, 10 + i * 6]);
+      ctx.lineDashOffset = -now * 0.02 * (i + 1);
+      ctx.strokeStyle = rgba(palette.amber, 0.35 - i * 0.07);
+      ctx.beginPath(); ctx.arc(0, 0, rr, 0, Math.PI * 2); ctx.stroke();
+      ctx.restore();
+    }
+    ctx.setLineDash([]);
+
+    // Tick ring
+    ctx.strokeStyle = rgba(palette.amber, 0.28);
+    for (let i = 0; i < 72; i++) {
+      const a = (i / 72) * Math.PI * 2 + rot * 0.2;
+      const len = i % 6 === 0 ? 10 : 4;
+      const r1 = R * 1.08, r2 = r1 + len;
+      ctx.beginPath();
+      ctx.moveTo(c + Math.cos(a) * r1, c + Math.sin(a) * r1);
+      ctx.lineTo(c + Math.cos(a) * r2, c + Math.sin(a) * r2);
+      ctx.stroke();
+    }
+
+    // Particles
+    const projected = new Array(N);
+    for (let i = 0; i < N; i++) {
+      const p = pts[i];
+      // Sparks: a few points flare outward at random
+      if (p.spark <= 0 && Math.random() < 0.004 * (1 + level * 4) * p.sparkRate) {
+        p.spark = 1;
+      }
+      p.spark = Math.max(0, p.spark - 0.03 * dt);
+
+      const wobble = 1 + Math.sin(now * 0.004 + p.phase) * 0.03 * (0.5 + level);
+      const rad = R * wobble * (1 + p.spark * 0.18);
+
+      // Rotate around Y then tilt around X
+      let x = p.x * cosY - p.z * sinY;
+      let z = p.x * sinY + p.z * cosY;
+      let y = p.y;
+      const y2 = y * cosX - z * sinX;
+      const z2 = y * sinX + z * cosX;
+
+      const persp = 2.2 / (2.2 - z2 * 0.5);
+      const sx = c + x * rad * persp;
+      const sy = c + y2 * rad * persp;
+      const depth = (z2 + 1) / 2; // 0 back, 1 front
+      projected[i] = { sx, sy, depth, spark: p.spark };
+    }
+
+    // Draw back-to-front
+    projected.sort((a, b) => a.depth - b.depth);
+    for (let i = 0; i < N; i++) {
+      const q = projected[i];
+      const flare = q.spark;
+      const a = 0.12 + q.depth * 0.65 + flare * 0.35;
+      const col = flare > 0.5 ? palette.bright : q.depth > 0.6 ? palette.amber : palette.hot;
+      const s = 0.8 + q.depth * 1.3 + flare * 2.2;
+      ctx.fillStyle = rgba(col, Math.min(1, a));
+      ctx.fillRect(q.sx - s / 2, q.sy - s / 2, s, s);
+    }
+
+    // Short streaks on front particles for motion
+    ctx.lineWidth = 1;
+    for (let i = N - 60; i < N; i++) {
+      const q = projected[i];
+      ctx.strokeStyle = rgba(palette.bright, 0.35 * q.depth);
+      ctx.beginPath();
+      ctx.moveTo(q.sx, q.sy);
+      ctx.lineTo(q.sx + (q.sx - c) * 0.06, q.sy + (q.sy - c) * 0.06);
+      ctx.stroke();
+    }
+
+    // Core glow
+    const core = ctx.createRadialGradient(c, c, 0, c, c, R * 0.42);
+    core.addColorStop(0, rgba(palette.bright, 0.35 + level * 0.25));
+    core.addColorStop(1, rgba(palette.hot, 0));
+    ctx.fillStyle = core;
+    ctx.beginPath(); ctx.arc(c, c, R * 0.42, 0, Math.PI * 2); ctx.fill();
+
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+
+  /* ---------- Status ---------- */
+  function setStatus(key) {
+    const s = t();
+    state.listening = key === "listening";
+    state.thinking = key === "thinking";
+    state.speaking = key === "speaking";
+    const label = key === "idle" ? "Idle" : key === "listening" ? "Listening" : key === "thinking" ? "Processing" : "Speaking";
+    stateEl.innerHTML = `<strong>${label}</strong> · ${key === "idle" ? s.idle : s[key]}`;
+    micBtn.setAttribute("aria-pressed", String(state.listening));
+  }
+
+  /* ---------- Messages ---------- */
+  function addMsg(role, text, extraClass = "") {
+    const el = document.createElement("div");
+    el.className = `msg ${role} ${extraClass}`.trim();
+    el.textContent = text;
+    log.appendChild(el);
+    log.scrollTop = log.scrollHeight;
+    return el;
+  }
+
+  /* ---------- Speech output ---------- */
+  function speak(text) {
+    if (!speakToggle.checked || !("speechSynthesis" in window)) return;
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = state.lang === "ta" ? "ta-IN" : "en-IN";
+    u.rate = 1;
+    u.onstart = () => setStatus("speaking");
+    u.onend = () => setStatus("idle");
+    u.onerror = () => setStatus("idle");
+    window.speechSynthesis.speak(u);
+  }
+
+  /* ---------- Local responder (demo logic) ---------- */
+  async function respond(raw) {
+    const s = t();
+    const q = raw.trim();
+    const lower = q.toLowerCase();
+
+    if (/^(hi|hello|hey|vanakkam)\b/i.test(q) || /வணக்கம்/.test(q)) return s.greet;
+
+    if (/\b(time|date|day is it)\b/.test(lower) || /நேரம்|தேதி/.test(q)) return s.timeNow(new Date());
+
+    if (/\bbattery\b/.test(lower) || /பேட்டரி/.test(q)) {
+      if (navigator.getBattery) {
+        try {
+          const b = await navigator.getBattery();
+          return s.battery(Math.round(b.level * 100), b.charging);
+        } catch (_) { /* fall through */ }
+      }
+      return s.batteryNA;
+    }
+
+    const openMatch = lower.match(/^(?:open|launch)\s+(.+)$/);
+    if (openMatch) return s.appNote(openMatch[1].replace(/\b\w/g, (c) => c.toUpperCase()));
+
+    const setting = lower.match(/brightness|bluetooth|wi-?fi|hotspot|volume|do not disturb|location/);
+    if (setting) {
+      const what = setting[0];
+      return s.settingsNote(what === "brightness" ? "Display settings" : what === "volume" ? "Sound settings" : what + " settings");
+    }
+
+    if (/\b(send|message|call|text)\b/.test(lower)) return s.confirm;
+
+    const mathLike = q.replace(/\s+/g, "");
+    if (/^[\d+\-*/().%^]+$/.test(mathLike) && /\d/.test(mathLike)) {
+      try {
+        const expr = mathLike.replace(/\^/g, "**").replace(/%/g, "/100");
+        const res = Function(`"use strict"; return (${expr});`)();
+        if (typeof res === "number" && isFinite(res)) return s.calc(q, Number(res.toPrecision(12)));
+      } catch (_) { return s.calcErr; }
+      return s.calcErr;
+    }
+
+    if (/explain.*(artificial intelligence|\bai\b)|what is (artificial intelligence|\bai\b)/.test(lower) || /செயற்கை நுண்ணறிவு/.test(q)) return s.ai;
+
+    return s.fallback;
+  }
+
+  /* ---------- Send flow ---------- */
+  async function send(text) {
+    const clean = text.trim();
+    if (!clean || state.thinking) return;
+    addMsg("user", clean);
+    state.history.push({ role: "user", content: clean });
+    setStatus("thinking");
+    const reply = await respond(clean);
+    setTimeout(() => {
+      addMsg("ai", reply);
+      state.history.push({ role: "assistant", content: reply });
+      if (speakToggle.checked) speak(reply);
+      else setStatus("idle");
+    }, 350);
+  }
+
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const v = input.value;
+    input.value = "";
+    send(v);
+  });
+
+  document.querySelectorAll("#quick button").forEach((b) => {
+    b.addEventListener("click", () => send(b.dataset.cmd));
+  });
+
+  /* ---------- Voice input ---------- */
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  let recognition = null;
+  if (SR) {
+    recognition = new SR();
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.onresult = (ev) => send(ev.results[0][0].transcript);
+    recognition.onend = () => { if (state.listening) setStatus("idle"); };
+    recognition.onerror = () => setStatus("idle");
+  }
+
+  micBtn.addEventListener("click", () => {
+    if (!voiceEnabled.checked) return addMsg("system", t().voiceOff);
+    if (!recognition) return addMsg("system", t().noSpeech, "warn");
+    if (state.listening) { recognition.stop(); return; }
+    recognition.lang = state.lang === "ta" ? "ta-IN" : "en-IN";
+    try {
+      recognition.start();
+      setStatus("listening");
+    } catch (_) {
+      setStatus("idle");
+    }
+  });
+
+  voiceEnabled.addEventListener("change", () => {
+    micBtn.disabled = !voiceEnabled.checked;
+  });
+
+  /* ---------- Controls ---------- */
+  function applyLang() {
+    const s = t();
+    document.documentElement.lang = state.lang === "ta" ? "ta" : "en";
+    input.placeholder = s.placeholder;
+    $("notice").textContent = s.notice;
+    $("langBtn").textContent = state.lang === "ta" ? "English" : "தமிழ்";
+    $("langBtn").setAttribute("aria-pressed", String(state.lang === "ta"));
+    micBtn.setAttribute("aria-label", state.lang === "ta" ? "குரல் உள்ளீட்டைத் தொடங்கு" : "Start voice input");
+    setStatus("idle");
+  }
+
+  $("langBtn").addEventListener("click", () => {
+    state.lang = state.lang === "en" ? "ta" : "en";
+    applyLang();
+  });
+
+  $("themeBtn").addEventListener("click", () => {
+    const light = document.documentElement.getAttribute("data-theme") === "light";
+    document.documentElement.setAttribute("data-theme", light ? "dark" : "light");
+    $("themeBtn").textContent = light ? "Light" : "Dark";
+    $("themeBtn").setAttribute("aria-pressed", String(!light));
+  });
+
+  $("clearBtn").addEventListener("click", () => {
+    state.history = [];
+    log.innerHTML = "";
+    addMsg("system", t().cleared);
+    addMsg("ai", t().greet);
+    setStatus("idle");
+    if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+  });
+
+  /* ---------- Zoom gestures ---------- */
+  const wrap = document.querySelector(".sphere-wrap");
+  let zoom = 1, pinchStart = 0, zoomAtPinch = 1;
+  const clampZoom = (z) => Math.min(2.4, Math.max(0.6, z));
+  function setZoom(z) {
+    zoom = clampZoom(z);
+    wrap.style.transform = `scale(${zoom})`;
+  }
+  const dist = (touches) => Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY);
+
+  wrap.addEventListener("touchstart", (e) => {
+    if (e.touches.length === 2) { pinchStart = dist(e.touches); zoomAtPinch = zoom; }
+  }, { passive: true });
+  wrap.addEventListener("touchmove", (e) => {
+    if (e.touches.length === 2 && pinchStart) {
+      e.preventDefault();
+      setZoom(zoomAtPinch * (dist(e.touches) / pinchStart));
+    }
+  }, { passive: false });
+  wrap.addEventListener("touchend", (e) => {
+    if (e.touches.length < 2) pinchStart = 0;
+  });
+  wrap.addEventListener("wheel", (e) => {
+    e.preventDefault();
+    setZoom(zoom * (e.deltaY < 0 ? 1.08 : 0.92));
+  }, { passive: false });
+  wrap.addEventListener("dblclick", () => setZoom(1));
+
+  /* ---------- Apps, revealed one by one ----------
+     Demo list only. A browser cannot read installed apps; the Android app
+     lists the apps the user allows it to see. */
+  const DEMO_APPS = [
+    ["YouTube", "#ff6b5a"], ["WhatsApp", "#5ef2b6"], ["Chrome", "#ffb347"],
+    ["Maps", "#ffe2a0"], ["Camera", "#ff7a1a"], ["Gallery", "#ffd27a"],
+    ["Settings", "#b8967a"], ["Calendar", "#ffb347"], ["Clock", "#ff7a1a"], ["Files", "#ffe2a0"],
+  ];
+  let revealTimer = null;
+
+  function makeTile(name, color) {
+    const b = document.createElement("button");
+    b.className = "app-tile";
+    b.innerHTML = `<span class="app-icon" style="background:${color}">${name[0]}</span><span>${name}</span>`;
+    b.addEventListener("click", () => send(`Open ${name}`));
+    return b;
+  }
+
+  function revealApps() {
+    const grid = $("appGrid");
+    clearTimeout(revealTimer);
+    grid.innerHTML = "";
+    let i = 0;
+    const step = () => {
+      if (i >= DEMO_APPS.length) return;
+      const [name, color] = DEMO_APPS[i++];
+      const tile = makeTile(name, color);
+      grid.appendChild(tile);
+      requestAnimationFrame(() => requestAnimationFrame(() => tile.classList.add("show")));
+      revealTimer = setTimeout(step, 260);
+    };
+    step();
+  }
+  $("revealBtn").addEventListener("click", revealApps);
+
+  /* ---------- Start ---------- */
+  addMsg("ai", t().greet);
+  applyLang();
+  micBtn.disabled = !voiceEnabled.checked;
+})();
+</script>
+</body>
+</html>
